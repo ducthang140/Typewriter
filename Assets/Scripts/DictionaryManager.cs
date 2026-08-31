@@ -8,8 +8,10 @@ public class DictionaryManager : MonoBehaviour
     public static DictionaryManager Instance;
 
     private HashSet<string> dictionary = new HashSet<string>();
-
     private List<string> sortedWords = new List<string>();
+
+    private Dictionary<char, List<string>> wordsByLetter =
+        new Dictionary<char, List<string>>();
 
     private void Awake()
     {
@@ -42,6 +44,28 @@ public class DictionaryManager : MonoBehaviour
             .Where(word => word.Length >= 2 && word.Length <= 10)
             .OrderByDescending(word => word.Length)
             .ToList();
+
+        BuildWordsByLetter();
+    }
+
+    private void BuildWordsByLetter()
+    {
+        wordsByLetter.Clear();
+
+        foreach (char letter in "abcdefghijklmnopqrstuvwxyz")
+        {
+            wordsByLetter[letter] = new List<string>();
+        }
+
+        foreach (string word in sortedWords)
+        {
+            HashSet<char> uniqueLetters = new HashSet<char>(word);
+
+            foreach (char letter in uniqueLetters)
+            {
+                wordsByLetter[letter].Add(word);
+            }
+        }
     }
 
     public bool IsValidWord(string word)
@@ -62,5 +86,15 @@ public class DictionaryManager : MonoBehaviour
     public List<string> GetSortedWords()
     {
         return sortedWords;
+    }
+
+    public List<string> GetWordsContainingLetter(char letter)
+    {
+        letter = char.ToLower(letter);
+
+        if (wordsByLetter.TryGetValue(letter, out List<string> words))
+            return words;
+
+        return new List<string>();
     }
 }
