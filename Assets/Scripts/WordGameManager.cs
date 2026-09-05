@@ -32,7 +32,7 @@ public class WordGameManager : MonoBehaviour
     [Header("Bonus Phase")]
     public Slider BonusGauge;
 
-    private float bonusGauge = 80f;
+    private float bonusGauge = 0f;
     private bool bonusPhaseActive = false;
     private float bonusPhaseTimer = 0f;
 
@@ -637,15 +637,15 @@ public class WordGameManager : MonoBehaviour
     {
         switch (wordLength)
         {
-            case 2: return 8f;
-            case 3: return 9f;
-            case 4: return 10f;
-            case 5: return 11f;
-            case 6: return 12f;
-            case 7: return 13f;
-            case 8: return 14f;
-            case 9: return 15f;
-            case 10: return 16f;
+            case 2: return 18f;
+            case 3: return 19f;
+            case 4: return 20f;
+            case 5: return 21f;
+            case 6: return 22f;
+            case 7: return 23f;
+            case 8: return 24f;
+            case 9: return 25f;
+            case 10: return 26f;
 
             default: return 0f;
         }
