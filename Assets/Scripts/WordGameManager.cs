@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
@@ -40,7 +41,8 @@ public class WordGameManager : MonoBehaviour
     private const float BonusGaugeRequired = 100f;
 
     private bool bonusWordProcessing = false;
-    private bool bonusCacheReady = false;
+
+    [Header("Stage")]
 
     private Dictionary<char, string> longestWordsByLetter =
         new Dictionary<char, string>();
@@ -50,6 +52,25 @@ public class WordGameManager : MonoBehaviour
     private Coroutine bonusCacheCoroutine;
     private int bonusCacheVersion = 0;
 
+    private bool bonusCacheReady = false;
+
+    [Header("Word Limit")]
+    [SerializeField] private int maxWords = 10;
+    private int remainingWords;
+
+    [SerializeField] private TMP_Text wordCountText;
+
+    [SerializeField] private GameObject stageFailPopup;
+
+    private bool stageCompleted = false;
+
+    [Header("Stage Completion Sequence")]
+    private bool stageCompletionSequenceActive = false;
+    private bool canGenerateBonusLetters = true;
+
+    private bool processingCompletionWord = false;
+    private bool processingCompletionShuffle = false;
+
     private void Awake()
     {
         Instance = this;
@@ -57,8 +78,21 @@ public class WordGameManager : MonoBehaviour
 
     private void Start()
     {
+        remainingWords = maxWords;
+        UpdateWordCountUI();
+
         Score = 0;
         ScoreText.text = Score.ToString();
+
+        if (stageCompletePopup != null)
+        {
+            stageCompletePopup.SetActive(false);
+        }
+
+        if (stageFailPopup != null)
+        {
+            stageFailPopup.SetActive(false);
+        }
 
         CreateBoard();
         CreateAnswerSlots();
@@ -104,6 +138,9 @@ public class WordGameManager : MonoBehaviour
 
     public void SelectLetter(LetterButton button)
     {
+        if (stageCompletionSequenceActive)
+            return;
+
         if (bonusPhaseActive)
         {
             if (bonusWordProcessing)
@@ -132,6 +169,15 @@ public class WordGameManager : MonoBehaviour
     }
 
     public void ClearSelection()
+    {
+        // Block player interaction during stage completion.
+        if (stageCompletionSequenceActive)
+            return;
+
+        ClearSelectionInternal();
+    }
+
+    private void ClearSelectionInternal()
     {
         foreach (LetterData letter in selectedLetters)
         {
@@ -186,9 +232,59 @@ public class WordGameManager : MonoBehaviour
             letterButtons[i].ReplaceLetter(GetRandomLetter());
         }
 
+        EnsureStageConditionLetters();
+
         if (!HasPossibleWord())
         {
             GenerateBoard();
+        }
+    }
+
+    private void EnsureStageConditionLetters()
+    {
+        if (StageConditionManager.Instance == null)
+            return;
+
+        List<char> requiredLetters =
+            StageConditionManager.Instance.GetRequiredLetters();
+
+        if (requiredLetters.Count == 0)
+            return;
+
+        if (requiredLetters.Count > letterButtons.Length)
+        {
+            Debug.LogError(
+                "There are more required letters than board slots!"
+            );
+            return;
+        }
+
+        // Randomly choose different board positions
+        List<int> positions = new List<int>();
+
+        for (int i = 0; i < letterButtons.Length; i++)
+        {
+            positions.Add(i);
+        }
+
+        // Shuffle positions
+        for (int i = 0; i < positions.Count; i++)
+        {
+            int randomIndex = Random.Range(i, positions.Count);
+
+            int temp = positions[i];
+            positions[i] = positions[randomIndex];
+            positions[randomIndex] = temp;
+        }
+
+        // Force one copy of every required letter onto the board
+        for (int i = 0; i < requiredLetters.Count; i++)
+        {
+            int position = positions[i];
+
+            letterButtons[position].ReplaceLetter(
+                requiredLetters[i]
+            );
         }
     }
 
@@ -202,6 +298,9 @@ public class WordGameManager : MonoBehaviour
 
     public void CheckWord()
     {
+        if (stageCompletionSequenceActive && !processingCompletionWord)
+            return;
+
         string word = "";
 
         foreach (LetterData letter in selectedLetters)
@@ -221,6 +320,18 @@ public class WordGameManager : MonoBehaviour
 
         // Valid word
         consecutiveValidWords++;
+
+        if (!bonusPhaseActive && !stageCompletionSequenceActive)
+        {
+            remainingWords--;
+            UpdateWordCountUI();
+        }
+
+        // Register letters for the current stage conditions
+        if (StageConditionManager.Instance != null)
+        {
+            StageConditionManager.Instance.RegisterWord(word);
+        }
 
         int points = GetWordScore(word.Length);
 
@@ -269,7 +380,7 @@ public class WordGameManager : MonoBehaviour
         Debug.Log("Total Score: " + Score);
 
         // Bonus Letter conditions
-        if (word.Length >= 7)
+        if (word.Length >= 5)
         {
             GrantBonusLetter();
         }
@@ -288,8 +399,16 @@ public class WordGameManager : MonoBehaviour
         // Replace used letters with new ones
         ConsumeLetters();
 
+        if (!bonusPhaseActive)
+        {
+            CheckWordLimit();
+        }
+
         // Check if the new board has a possible word
-        CheckBoard();
+        if (!stageCompletionSequenceActive)
+        {
+            CheckBoard();
+        }
 
         if (bonusPhaseActive)
         {
@@ -303,6 +422,10 @@ public class WordGameManager : MonoBehaviour
         {
             letter.button.ReplaceLetter(GetRandomLetter());
         }
+
+        EnsureStageConditionLetters();
+
+        BuildBoardLetterCounts();
 
         selectedLetters.Clear();
 
@@ -327,6 +450,10 @@ public class WordGameManager : MonoBehaviour
 
     public void ShuffleLetters()
     {
+        if (stageCompletionSequenceActive &&
+        !processingCompletionShuffle)
+            return;
+
         ClearSelection();
 
         List<BonusType> bonuses =
@@ -344,6 +471,10 @@ public class WordGameManager : MonoBehaviour
         {
             button.ReplaceLetter(GetRandomLetter());
         }
+
+        EnsureStageConditionLetters();
+
+        BuildBoardLetterCounts();
 
         foreach (BonusType bonus in bonuses)
         {
@@ -407,6 +538,9 @@ public class WordGameManager : MonoBehaviour
 
     private void GrantBonusLetter()
     {
+        if (!canGenerateBonusLetters)
+            return;
+
         List<LetterButton> availableLetters =
             new List<LetterButton>();
 
@@ -458,13 +592,10 @@ public class WordGameManager : MonoBehaviour
     {
         bonusPhaseActive = true;
         bonusCacheReady = false;
-        bonusPhaseTimer = 0f;
 
         bonusGauge = BonusGaugeRequired;
         BonusGauge.value = bonusGauge;
 
-        // Build the cache first.
-        // The 10-second timer starts when the cache is ready.
         StartBonusCacheRebuild();
     }
 
@@ -473,7 +604,6 @@ public class WordGameManager : MonoBehaviour
         if (!bonusPhaseActive)
             return;
 
-        // Don't start counting down until the initial cache is ready.
         if (!bonusCacheReady)
             return;
 
@@ -488,7 +618,6 @@ public class WordGameManager : MonoBehaviour
     private void EndBonusPhase()
     {
         bonusPhaseActive = false;
-        bonusCacheReady = false;
 
         bonusPhaseTimer = 0f;
         bonusGauge = 0f;
@@ -503,6 +632,95 @@ public class WordGameManager : MonoBehaviour
 
         longestWordsByLetter.Clear();
         bonusWordProcessing = false;
+        bonusCacheReady = false;
+
+        if (remainingWords <= 0 && !stageCompletionSequenceActive)
+        {
+            StageFail();
+        }
+    }
+
+    public void StartStageCompletionSequence()
+    {
+        if (stageCompletionSequenceActive)
+            return;
+
+        stageCompletionSequenceActive = true;
+        canGenerateBonusLetters = false;
+
+        // End current Bonus Phase
+        if (bonusPhaseActive)
+        {
+            EndBonusPhase();
+        }
+
+        StartCoroutine(StageCompletionBonusSequence());
+    }
+
+    private IEnumerator StageCompletionBonusSequence()
+    {
+        // Convert remaining words into completion bonus letters
+        int bonusCount = remainingWords;
+
+        remainingWords = 0;
+        UpdateWordCountUI();
+
+        // Generate completion bonus letters
+        for (int i = 0; i < bonusCount; i++)
+        {
+            GrantCompletionBonusLetter();
+        }
+
+        while (HasBonusLettersOnBoard())
+        {
+            BuildBoardLetterCounts();
+
+            // Find all bonus letters that can actually make a word
+            List<LetterButton> usableBonusLetters =
+                GetUsableBonusLetters();
+
+            // None of the bonus letters can make a word
+            if (usableBonusLetters.Count == 0)
+            {
+                processingCompletionShuffle = true;
+
+                ShuffleLetters();
+
+                processingCompletionShuffle = false;
+
+                // Let the new board/cache settle
+                yield return null;
+
+                continue;
+            }
+
+            // Pick one random usable bonus letter
+            LetterButton selectedButton =
+                usableBonusLetters[
+                    Random.Range(0, usableBonusLetters.Count)
+                ];
+
+            string word = FindLongestWord(selectedButton.Letter);
+
+            if (string.IsNullOrEmpty(word))
+                continue;
+
+            // Auto-fill
+            FillBonusWord(word);
+
+            yield return new WaitForSecondsRealtime(0.2f);
+
+            // Check the completion word
+            processingCompletionWord = true;
+
+            CheckWord();
+
+            processingCompletionWord = false;
+
+            yield return new WaitForSecondsRealtime(0.2f);
+        }
+
+        StageComplete();
     }
 
     private void StartBonusWord(LetterButton selectedButton)
@@ -510,9 +728,14 @@ public class WordGameManager : MonoBehaviour
         char letter = char.ToLower(selectedButton.Letter);
 
         if (!longestWordsByLetter.TryGetValue(letter, out string word))
+        {
+            bonusWordProcessing = false;
             return;
+        }
 
         FillBonusWord(word);
+
+        StartCoroutine(CheckBonusWordAfterDelay());
     }
 
     private string FindLongestWord(char requiredLetter)
@@ -525,6 +748,9 @@ public class WordGameManager : MonoBehaviour
         for (int i = 0; i < candidates.Count; i++)
         {
             string word = candidates[i];
+
+            if (word.Length > MaxWordLength)
+                continue;
 
             if (CanMakeWordFromBoard(word))
                 return word;
@@ -604,10 +830,12 @@ public class WordGameManager : MonoBehaviour
 
         bonusCacheCoroutine = null;
 
+        // The 10-second timer starts only when the initial cache is ready.
+        bonusCacheCoroutine = null;
+
         if (!bonusPhaseActive)
             yield break;
 
-        // The first cache build starts the 10-second Bonus Phase timer.
         if (!bonusCacheReady)
         {
             bonusCacheReady = true;
@@ -653,7 +881,7 @@ public class WordGameManager : MonoBehaviour
 
     private void FillBonusWord(string word)
     {
-        ClearSelection();
+        ClearSelectionInternal();
 
         List<LetterButton> availableButtons =
             new List<LetterButton>();
@@ -708,9 +936,6 @@ public class WordGameManager : MonoBehaviour
 
             availableButtons.Remove(matchingButton);
         }
-
-        // Wait 0.2 seconds ONLY after the answer has been filled.
-        StartCoroutine(CheckBonusWordAfterDelay());
     }
 
     private System.Collections.IEnumerator CheckBonusWordAfterDelay()
@@ -726,5 +951,141 @@ public class WordGameManager : MonoBehaviour
         CheckWord();
 
         bonusWordProcessing = false;
+    }
+
+    [SerializeField] private GameObject stageCompletePopup;
+
+    public void StageComplete()
+    {
+        if (stageCompleted)
+            return;
+
+        stageCompleted = true;
+
+        if (stageCompletePopup != null)
+        {
+            stageCompletePopup.SetActive(true);
+        }
+    }
+
+    private void UpdateWordCountUI()
+    {
+        if (wordCountText != null)
+        {
+            wordCountText.text = "" + remainingWords;
+        }
+    }
+
+    private void CheckWordLimit()
+    {
+        if (remainingWords > 0)
+            return;
+
+        if (bonusPhaseActive)
+            return;
+
+        if (stageCompletionSequenceActive)
+            return;
+
+        StageFail();
+    }
+
+    public void StageFail()
+    {
+        if (stageCompleted)
+            return;
+
+        if (stageFailPopup != null)
+        {
+            stageFailPopup.SetActive(true);
+        }
+    }
+
+    private void GrantCompletionBonusLetter()
+    {
+        List<LetterButton> availableLetters =
+            new List<LetterButton>();
+
+        foreach (LetterButton button in letterButtons)
+        {
+            if (button.LetterText.text != "" &&
+                button.Bonus == BonusType.None)
+            {
+                availableLetters.Add(button);
+            }
+        }
+
+        if (availableLetters.Count == 0)
+            return;
+
+        LetterButton target =
+            availableLetters[
+                Random.Range(0, availableLetters.Count)
+            ];
+
+        BonusType bonus =
+            (BonusType)Random.Range(1, 4);
+
+        target.SetBonus(bonus);
+    }
+
+    private bool HasBonusLettersOnBoard()
+    {
+        foreach (LetterButton button in letterButtons)
+        {
+            if (button.LetterText.text != "" &&
+                button.Bonus != BonusType.None)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private LetterButton GetRandomBonusLetter()
+    {
+        List<LetterButton> bonusLetters =
+            new List<LetterButton>();
+
+        foreach (LetterButton button in letterButtons)
+        {
+            if (button.LetterText.text != "" &&
+                button.Bonus != BonusType.None)
+            {
+                bonusLetters.Add(button);
+            }
+        }
+
+        if (bonusLetters.Count == 0)
+            return null;
+
+        return bonusLetters[
+            Random.Range(0, bonusLetters.Count)
+        ];
+    }
+
+    private List<LetterButton> GetUsableBonusLetters()
+    {
+        List<LetterButton> usable =
+            new List<LetterButton>();
+
+        foreach (LetterButton button in letterButtons)
+        {
+            if (button.LetterText.text == "")
+                continue;
+
+            if (button.Bonus == BonusType.None)
+                continue;
+
+            string word = FindLongestWord(button.Letter);
+
+            if (!string.IsNullOrEmpty(word))
+            {
+                usable.Add(button);
+            }
+        }
+
+        return usable;
     }
 }

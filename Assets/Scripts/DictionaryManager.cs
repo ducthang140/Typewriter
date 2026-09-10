@@ -41,7 +41,7 @@ public class DictionaryManager : MonoBehaviour
         Debug.Log("Loaded words: " + dictionary.Count);
 
         sortedWords = dictionary
-            .Where(word => word.Length >= 2 && word.Length <= 10)
+            .Where(word => word.Length >= 2 && word.Length <= 6)
             .OrderByDescending(word => word.Length)
             .ToList();
 
