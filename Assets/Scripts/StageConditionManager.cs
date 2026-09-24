@@ -7,6 +7,11 @@ public class StageConditionManager : MonoBehaviour
 
     private List<LetterCondition> conditions = new List<LetterCondition>();
 
+    public List<LetterCondition> GetConditions()
+    {
+        return conditions;
+    }
+
     private void Awake()
     {
         Instance = this;

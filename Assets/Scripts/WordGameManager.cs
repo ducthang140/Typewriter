@@ -21,6 +21,18 @@ public class WordGameManager : MonoBehaviour
 
     public int Score { get; private set; }
 
+    [Header("Star Progress")]
+    [SerializeField] private Slider starProgressSlider;
+    [SerializeField] private int oneStarScore = 10000;
+    [SerializeField] private int twoStarScore = 20000;
+    [SerializeField] private int threeStarScore = 30000;
+
+    [SerializeField] private Image star1;
+    [SerializeField] private Image star2;
+    [SerializeField] private Image star3;
+
+    private int currentStars = 0;
+
     private LetterButton[] letterButtons;
     private AnswerSlot[] answerSlots;
 
@@ -62,6 +74,12 @@ public class WordGameManager : MonoBehaviour
 
     [SerializeField] private GameObject stageFailPopup;
 
+    [Header("Shuffle Limit")]
+    [SerializeField] private int maxManualShuffles = 3;
+    private int remainingManualShuffles;
+
+    [SerializeField] private TMP_Text shuffleCountText;
+
     private bool stageCompleted = false;
 
     [Header("Stage Completion Sequence")]
@@ -80,6 +98,9 @@ public class WordGameManager : MonoBehaviour
     {
         remainingWords = maxWords;
         UpdateWordCountUI();
+
+        remainingManualShuffles = maxManualShuffles;
+        UpdateShuffleCountUI();
 
         Score = 0;
         ScoreText.text = Score.ToString();
@@ -100,6 +121,8 @@ public class WordGameManager : MonoBehaviour
         GenerateBoard();
 
         GrantStartingBonuses();
+
+        UpdateStarProgress();
     }
 
     private void CreateBoard()
@@ -331,6 +354,11 @@ public class WordGameManager : MonoBehaviour
         if (StageConditionManager.Instance != null)
         {
             StageConditionManager.Instance.RegisterWord(word);
+
+            StageObjectiveUI objectiveUI = FindFirstObjectByType<StageObjectiveUI>();
+
+            if (objectiveUI != null)
+                objectiveUI.Refresh();
         }
 
         int points = GetWordScore(word.Length);
@@ -366,6 +394,9 @@ public class WordGameManager : MonoBehaviour
         // Add to total score
         Score += points;
         ScoreText.text = Score.ToString();
+
+        UpdateStarProgress();
+
         if (!bonusPhaseActive)
         {
             float gaugeGain = GetGaugeGain(word.Length);
@@ -976,6 +1007,15 @@ public class WordGameManager : MonoBehaviour
         }
     }
 
+    private void UpdateShuffleCountUI()
+    {
+        if (shuffleCountText != null)
+        {
+            shuffleCountText.text =
+                remainingManualShuffles + "/" + maxManualShuffles;
+        }
+    }
+
     private void CheckWordLimit()
     {
         if (remainingWords > 0)
@@ -1087,5 +1127,53 @@ public class WordGameManager : MonoBehaviour
         }
 
         return usable;
+    }
+
+    public void ManualShuffle()
+    {
+        if (stageCompletionSequenceActive)
+            return;
+
+        if (remainingManualShuffles <= 0)
+            return;
+
+        remainingManualShuffles--;
+
+        UpdateShuffleCountUI();
+
+        ShuffleLetters();
+    }
+
+    private void UpdateStarProgress()
+    {
+        if (starProgressSlider != null)
+        {
+            float progress =
+                Mathf.InverseLerp(0f, threeStarScore, Score);
+
+            starProgressSlider.value = progress;
+        }
+
+        int stars = 0;
+
+        if (Score >= oneStarScore)
+            stars = 1;
+
+        if (Score >= twoStarScore)
+            stars = 2;
+
+        if (Score >= threeStarScore)
+            stars = 3;
+
+        currentStars = stars;
+
+        if (star1 != null)
+            star1.color = stars >= 1 ? Color.white : Color.gray;
+
+        if (star2 != null)
+            star2.color = stars >= 2 ? Color.white : Color.gray;
+
+        if (star3 != null)
+            star3.color = stars >= 3 ? Color.white : Color.gray;
     }
 }
