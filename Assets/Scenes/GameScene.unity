@@ -1215,9 +1215,9 @@ MonoBehaviour:
   BoardSize: 18
   MaxWordLength: 6
   starProgressSlider: {fileID: 1037493485}
-  oneStarScore: 500
-  twoStarScore: 1000
-  threeStarScore: 1500
+  oneStarScore: 2000
+  twoStarScore: 4000
+  threeStarScore: 6000
   star1: {fileID: 1209948669}
   star2: {fileID: 416555370}
   star3: {fileID: 752882586}

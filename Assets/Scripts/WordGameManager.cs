@@ -1,3 +1,4 @@
+using DG.Tweening;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
@@ -23,9 +24,9 @@ public class WordGameManager : MonoBehaviour
 
     [Header("Star Progress")]
     [SerializeField] private Slider starProgressSlider;
-    [SerializeField] private int oneStarScore = 10000;
-    [SerializeField] private int twoStarScore = 20000;
-    [SerializeField] private int threeStarScore = 30000;
+    [SerializeField] private int oneStarScore = 2000;
+    [SerializeField] private int twoStarScore = 4000;
+    [SerializeField] private int threeStarScore = 6000;
 
     [SerializeField] private Image star1;
     [SerializeField] private Image star2;
@@ -122,6 +123,8 @@ public class WordGameManager : MonoBehaviour
 
         GrantStartingBonuses();
 
+        Score = 0;
+        currentStars = 0;
         UpdateStarProgress();
     }
 
@@ -1165,6 +1168,18 @@ public class WordGameManager : MonoBehaviour
         if (Score >= threeStarScore)
             stars = 3;
 
+        if (stars > currentStars)
+        {
+            if (stars >= 1 && currentStars < 1)
+                PlayStarPop(star1);
+
+            if (stars >= 2 && currentStars < 2)
+                PlayStarPop(star2);
+
+            if (stars >= 3 && currentStars < 3)
+                PlayStarPop(star3);
+        }
+
         currentStars = stars;
 
         if (star1 != null)
@@ -1175,5 +1190,23 @@ public class WordGameManager : MonoBehaviour
 
         if (star3 != null)
             star3.color = stars >= 3 ? Color.white : Color.gray;
+    }
+
+    private void PlayStarPop(Image star)
+    {
+        if (star == null)
+            return;
+
+        star.transform.DOKill();
+
+        star.transform.localScale = Vector3.one;
+
+        star.transform
+            .DOPunchScale(
+                Vector3.one * 0.3f,
+                0.35f,
+                8,
+                0.5f
+            );
     }
 }
