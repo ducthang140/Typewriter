@@ -2,6 +2,8 @@
 
 A mobile word puzzle game built with Unity and C#.
 
+<img width="421" height="755" alt="image" src="https://github.com/user-attachments/assets/447ff7a6-fd11-447d-943a-f9b303241059" />
+
 Lettra challenges players to create valid words from a limited letter board, complete stage objectives, manage limited word attempts, and use Bonus Letters to build score and trigger special gameplay phases.
 
 ## Features
